@@ -6,7 +6,8 @@ def get_states():
     q = session.query(State)\
             .order_by(State.name)
     for row in q.all():
-        print(row.name)
+        yield row.name
 
 if __name__ == '__main__':
-    get_states()
+    for state in get_states():
+        print(state)
