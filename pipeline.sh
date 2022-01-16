@@ -4,7 +4,7 @@
 pdf=oab.pdf
 txt=oab.txt
 
-# convert pdf2 to text
+# convert pdf to text
 python3 pdf2text.py "$pdf" "$txt"
 
 # remove newlines
