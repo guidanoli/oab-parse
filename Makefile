@@ -26,7 +26,7 @@ $(TXT): $(PDF)
 	# keep interesting lines only
 	$(CAT) tmp2 | $(GREP) -E '^[0-9]+\.( [^a-z]*$$|[0-9]+)' > $(TXT)
 	# clean temporary files
-	$(RM) -f tmp1 tmp2
+	$(RM) tmp1 tmp2
 
 $(DB): $(TXT)
 	# parse file and create database

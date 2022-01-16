@@ -1,32 +1,16 @@
-from sqlalchemy import Column, Integer, String, ForeignKey, create_engine
-from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import sessionmaker
 from tqdm import tqdm
+from schema import Session, State, City, Person, HasName, Name, NameType
 
-engine = create_engine('sqlite:///oab.db')
-Base = declarative_base()
+def normalize_names(names):
+    return tuple(name.title() for name in names)
 
-class State(Base):
-    __tablename__ = 'state'
-    id = Column(Integer, primary_key=True)
-    name = Column(String)
-
-class City(Base):
-    __tablename__ = 'city'
-    id = Column(Integer, primary_key=True)
-    name = Column(String)
-    state = Column(Integer, ForeignKey('state.id'))
-
-class Person(Base):
-    __tablename__ = 'person'
-    id = Column(Integer, primary_key=True)
-    name = Column(String)
-    mat = Column(Integer)
-    city = Column(Integer, ForeignKey('city.id'))
-
-Base.metadata.create_all(engine)
-
-Session = sessionmaker(bind=engine)
+def categorize_name(name, new_name_type, name_types):
+    type_dict = name_types.get(name)
+    if type_dict is None:
+        name_types[name] = {new_name_type: 1}
+    else:
+        old_count = type_dict.get(new_name_type, 0)
+        type_dict[new_name_type] = old_count + 1
 
 def parse(fp):
     import re
@@ -46,9 +30,9 @@ def parse(fp):
             city = m.group(1).strip()
             cities.add((city, state))
             for data in m.group(2).strip(' .').split('/'):
-                person_mat, person_name = data.strip().split(', ')
-                person_mat = int(person_mat)
-                people.add((person_name, person_mat, city))
+                person_number, person_name = data.strip().split(', ')
+                person_names = normalize_names(person_name.split())
+                people.add((person_names, person_number, city))
         else:
             session.rollback()
             return False
@@ -65,16 +49,44 @@ def parse(fp):
         session.add(city)
         session.flush()
         city_ids[city_name] = city.id
-    for (person_name, person_mat, city_name) in tqdm(people, ascii=True, desc="Storing people"):
+    name_type_candidates = dict()
+    for (person_names, _, _) in tqdm(people, ascii=True, desc="Analysing names 1/2"):
+        # assume at first that the first name is always a Forename
+        # and that the other ones are surenames
+        categorize_name(person_names[0], NameType.Forename, name_type_candidates)
+        for person_name in person_names[1:]:
+            categorize_name(person_name, NameType.Surname, name_type_candidates)
+    name_types = dict()
+    for (name, type_dict) in tqdm(name_type_candidates.items(), ascii=True, desc="Analysing names 2/2"):
+        # choose the most common type. on draw, make it 'Unknown'
+        winning_items = sorted(type_dict.items(), key=lambda t: t[1], reverse=True)[:2]
+        if len(winning_items) > 1 and winning_items[0][1] == winning_items[1][1]:
+            name_types[name] = NameType.Unknown
+        else:
+            name_types[name] = winning_items[0][0]
+    name_ids = dict()
+    for (person_names, person_number, city_name) in tqdm(people, ascii=True, desc="Storing people"):
         city_id = city_ids[city_name]
-        person = Person(name=person_name, mat=person_mat, city=city_id)
+        fullname = ' '.join(person_names)
+        person = Person(city=city_id, number=person_number, fullname=fullname)
         session.add(person)
+        session.flush()
+        person_names_count = len(person_names)
+        for name_pos, name_str in enumerate(person_names):
+            if name_str not in name_ids:
+                name_type = name_types[name_str]
+                name = Name(name=name_str, type=name_type)
+                session.add(name)
+                session.flush()
+                name_ids[name_str] = name.id
+            name_id = name_ids[name_str]
+            has_name = HasName(name=name_id, person=person.id, position=name_pos+1)
+            session.add(has_name)
     session.commit()
     return True
 
 if __name__ == '__main__':
     from sys import argv
-    import sqlite3
     assert len(argv) == 2, "Usage: python parse.py <input-file>"
     input_file = argv[1]
     with open(input_file) as fp:
