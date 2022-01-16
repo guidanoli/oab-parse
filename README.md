@@ -15,4 +15,9 @@ pip install -r requirements.txt
 
 ## Running
 
-Simply run `pipeline.sh`
+Run Make!
+
+```sh
+make
+make clean
+```
