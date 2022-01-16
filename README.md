@@ -4,6 +4,7 @@
 
 * Git LFS >= 3.0.2
 * Python >= 3.8.10
+* `make`, `sed`, `grep`, `cat`, `tr`
 
 ## Setup
 
@@ -19,5 +20,4 @@ Run Make!
 
 ```sh
 make
-make clean
 ```
